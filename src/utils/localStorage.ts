@@ -3,7 +3,7 @@
  * 싱글파일 프리뷰에서 백엔드 없이 동작하도록 함
  */
 
-import type { Goal, AttemptCreate, FailureReason } from '@/types';
+import type { Goal, AttemptCreate, FailureReason, ExemptReason } from '@/types';
 
 const STORAGE_KEYS = {
   GOALS: 'ggumul_goals',
@@ -12,7 +12,7 @@ const STORAGE_KEYS = {
 } as const;
 
 // 목표 타입 (localStorage용, 서버 응답과 동일하게)
-export interface StoredGoal extends Omit<Goal, 'current_streak' | 'best_streak' | 'today_attempted' | 'today_success' | 'is_top_priority'> {
+export interface StoredGoal extends Omit<Goal, 'current_streak' | 'best_streak' | 'today_attempted' | 'today_success' | 'today_exempt' | 'monthly_exemptions_used' | 'is_top_priority'> {
   created_at: string;
   updated_at: string;
   is_active: boolean;
@@ -26,8 +26,9 @@ export interface StoredAttempt {
   attempted_date: string; // YYYY-MM-DD
   success: boolean;
   failure_reason?: FailureReason;
-  failure_memo?: string;
   used_revival: boolean;
+  is_exempt?: boolean;
+  exempt_reason?: string;
   created_at: string;
 }
 
@@ -142,7 +143,8 @@ export const localAttempts = {
         ...attempts[existingIndex],
         success: data.success,
         failure_reason: data.failure_reason,
-        failure_memo: data.failure_memo,
+        is_exempt: data.is_exempt,
+        exempt_reason: data.exempt_reason,
       };
       setToStorage(STORAGE_KEYS.ATTEMPTS, attempts);
       return attempts[existingIndex];
@@ -158,8 +160,9 @@ export const localAttempts = {
       attempted_date: data.attempted_date,
       success: data.success,
       failure_reason: data.failure_reason,
-      failure_memo: data.failure_memo,
       used_revival: data.use_revival || false,
+      is_exempt: data.is_exempt,
+      exempt_reason: data.exempt_reason,
       created_at: new Date().toISOString(),
     };
 
@@ -188,45 +191,82 @@ export const localAttempts = {
   },
 };
 
-// Streak 계산 (백엔드 로직 복제)
+// Streak 계산 (면제일 건너뛰기 로직 포함)
 export function calculateStreak(goalId: number): { current: number; best: number } {
-  const attempts = localAttempts.getByGoalId(goalId)
-    .filter(a => a.success)
+  // 성공 + 면제 기록 모두 포함
+  const allAttempts = localAttempts.getByGoalId(goalId)
+    .filter(a => a.success || a.is_exempt)
     .sort((a, b) => b.attempted_date.localeCompare(a.attempted_date));
 
-  if (attempts.length === 0) return { current: 0, best: 0 };
+  if (allAttempts.length === 0) return { current: 0, best: 0 };
 
-  const today = new Date().toISOString().split('T')[0];
-  let current = 0;
-  let best = 0;
-  let tempStreak = 0;
-  let checkDate = new Date(today);
-
-  // 현재 스트릭 계산
-  for (const attempt of attempts) {
-    const attemptDate = attempt.attempted_date;
-    const expectedDate = checkDate.toISOString().split('T')[0];
-
-    if (attemptDate === expectedDate) {
-      current++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else {
-      break;
+  // 날짜별 맵 생성 (성공/면제 구분)
+  const attemptMap = new Map<string, StoredAttempt>();
+  for (const a of allAttempts) {
+    if (!attemptMap.has(a.attempted_date)) {
+      attemptMap.set(a.attempted_date, a);
     }
   }
 
-  // 최고 스트릭 계산
-  const allDates = attempts.map(a => a.attempted_date).sort();
-  for (let i = 0; i < allDates.length; i++) {
-    tempStreak = 1;
-    let currentDate = new Date(allDates[i]);
+  const today = new Date().toISOString().split('T')[0];
 
-    for (let j = i + 1; j < allDates.length; j++) {
-      const nextDate = new Date(allDates[j]);
-      currentDate.setDate(currentDate.getDate() + 1);
+  // 현재 스트릭 계산: 오늘부터 역순으로
+  // 성공 → +1 계속, 면제 → +0 건너뛰고 계속, 실패/없음 → 중단
+  let current = 0;
+  let checkDate = new Date(today);
 
-      if (nextDate.toISOString().split('T')[0] === currentDate.toISOString().split('T')[0]) {
+  for (let i = 0; i < 365; i++) {
+    const dateStr = checkDate.toISOString().split('T')[0];
+    const attempt = attemptMap.get(dateStr);
+
+    if (!attempt) {
+      break; // 기록 없음 → 중단
+    } else if (attempt.is_exempt) {
+      // 면제 → 건너뛰고 계속 (streak에 포함하지 않음)
+    } else if (attempt.success) {
+      current++; // 성공 → +1
+    } else {
+      break; // 실패 → 중단
+    }
+
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+
+  // 최고 스트릭 계산: 전체 기간에서 슬라이딩 윈도우
+  // 성공 날짜 오름차순 정렬
+  const successDates = allAttempts
+    .filter(a => !a.is_exempt)
+    .map(a => a.attempted_date)
+    .sort();
+
+  let best = 0;
+
+  for (let i = 0; i < successDates.length; i++) {
+    let tempStreak = 1;
+    let prevDate = new Date(successDates[i]);
+
+    for (let j = i + 1; j < successDates.length; j++) {
+      const nextDate = new Date(successDates[j]);
+
+      // prevDate와 nextDate 사이의 날짜가 모두 면제일인지 확인
+      const prevCopy = new Date(prevDate);
+      prevCopy.setDate(prevCopy.getDate() + 1);
+      let allExempt = true;
+
+      while (prevCopy.toISOString().split('T')[0] < nextDate.toISOString().split('T')[0]) {
+        const betweenDate = prevCopy.toISOString().split('T')[0];
+        const between = attemptMap.get(betweenDate);
+        if (!between || !between.is_exempt) {
+          allExempt = false;
+          break;
+        }
+        prevCopy.setDate(prevCopy.getDate() + 1);
+      }
+
+      if (prevCopy.toISOString().split('T')[0] === nextDate.toISOString().split('T')[0] && allExempt) {
+        // 사이 날짜가 모두 면제일이면 연결
         tempStreak++;
+        prevDate = nextDate;
       } else {
         break;
       }
@@ -235,7 +275,83 @@ export function calculateStreak(goalId: number): { current: number; best: number
     best = Math.max(best, tempStreak);
   }
 
+  best = Math.max(best, current);
+
   return { current, best };
+}
+
+// 이번 달 면제 사용 횟수 (모든 목표의 면제 기록 중 고유 날짜 수)
+export function getMonthlyExemptionCount(): number {
+  const now = new Date();
+  const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const allAttempts = localAttempts.getAll();
+  const exemptDates = new Set<string>();
+
+  for (const a of allAttempts) {
+    if (a.is_exempt && a.attempted_date.startsWith(yearMonth)) {
+      exemptDates.add(a.attempted_date);
+    }
+  }
+
+  return exemptDates.size;
+}
+
+// 어제까지 연속 면제일 수 (연속 2일 제한 체크용)
+export function getConsecutiveExemptDays(): number {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  let count = 0;
+  let checkDate = yesterday;
+  const allAttempts = localAttempts.getAll();
+
+  for (let i = 0; i < 10; i++) {
+    const dateStr = checkDate.toISOString().split('T')[0];
+    const hasExempt = allAttempts.some(a => a.is_exempt && a.attempted_date === dateStr);
+
+    if (hasExempt) {
+      count++;
+      checkDate = new Date(checkDate);
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  return count;
+}
+
+// 오늘 면제 여부
+export function isTodayExempt(): boolean {
+  const today = new Date().toISOString().split('T')[0];
+  return localAttempts.getAll().some(a => a.is_exempt && a.attempted_date === today);
+}
+
+// 미완료 목표에만 면제 기록 생성 (이미 성공한 목표는 건너뜀)
+export function createExemption(date: string, reason: ExemptReason): void {
+  const activeGoals = localGoals.getAll().filter(g => g.is_active);
+
+  for (const goal of activeGoals) {
+    const existing = localAttempts.getByDate(goal.id, date);
+    // 이미 성공한 기록이 있으면 건너뜀
+    if (existing?.success) continue;
+
+    localAttempts.create(goal.id, {
+      attempted_date: date,
+      success: false,
+      is_exempt: true,
+      exempt_reason: reason,
+    });
+  }
+}
+
+// 오늘 면제 취소 (기록 삭제 + 횟수 복구)
+export function cancelExemption(date: string): void {
+  const attempts = localAttempts.getAll();
+  const filtered = attempts.filter(a => !(a.is_exempt && a.attempted_date === date));
+  setToStorage(STORAGE_KEYS.ATTEMPTS, filtered);
 }
 
 // 우선순위 계산 (간단 버전)

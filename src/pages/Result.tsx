@@ -82,7 +82,7 @@ export default function Result() {
 
   // 실패 기록 핸들러
   const handleFailureSubmit = useCallback(
-    async (reason: FailureReason, memo?: string) => {
+    async (reason: FailureReason) => {
       if (!goal) return;
 
       try {
@@ -90,7 +90,6 @@ export default function Result() {
           attempted_date: getTodayString(),
           success: false,
           failure_reason: reason,
-          failure_memo: memo,
         });
         setShowFailureModal(false);
 

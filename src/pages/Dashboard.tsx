@@ -1,7 +1,10 @@
-import { useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, Navigate } from 'react-router-dom';
 import { useGoalStore } from '@/stores/goalStore';
 import GoalCard from '@/components/GoalCard';
+import { isOnboardingDone } from '@/pages/Onboarding';
+import { getUnreadCheers, markCheersAsRead, type Cheer } from '@/api/friends';
+import { haptic } from '@/utils/haptic';
 
 /**
  * 대시보드 (홈) 페이지.
@@ -9,16 +12,52 @@ import GoalCard from '@/components/GoalCard';
  */
 export default function Dashboard() {
   const { goals, loading, error, fetchGoals } = useGoalStore();
+  const [cheers, setCheers] = useState<Cheer[]>([]);
 
   useEffect(() => {
     fetchGoals();
+    getUnreadCheers().then(setCheers).catch(() => {});
   }, [fetchGoals]);
+
+  const handleDismissCheers = async () => {
+    haptic.light();
+    const ids = cheers.map((c) => c.id);
+    setCheers([]);
+    await markCheersAsRead(ids).catch(() => {});
+  };
+
+  // 첫 방문 시 온보딩으로 리다이렉트
+  if (!isOnboardingDone()) {
+    return <Navigate to="/onboarding" replace />;
+  }
 
   // 오늘 완료한 목표 수
   const completedToday = goals.filter((g) => g.today_success).length;
 
   return (
     <div className="relative min-h-[70vh]">
+      {/* 응원 배너 */}
+      {cheers.length > 0 && (
+        <div className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-primary-50 to-primary-100 dark:from-primary-500/10 dark:to-primary-600/5 border border-primary-200 dark:border-primary-500/20 animate-slide-up">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{cheers[0].emoji}</span>
+              <p className="text-sm font-medium text-text">
+                {cheers.length === 1
+                  ? `${cheers[0].from_nickname || '친구'}님이 응원을 보냈어요!`
+                  : `${cheers[0].from_nickname || '친구'}님 외 ${cheers.length - 1}명이 응원을 보냈어요!`}
+              </p>
+            </div>
+            <button
+              onClick={handleDismissCheers}
+              className="px-3 py-1.5 rounded-lg bg-primary-500/10 hover:bg-primary-500/20 text-xs font-medium text-primary-600 dark:text-primary-400 transition-colors"
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 로딩 상태 */}
       {loading && goals.length === 0 && (
         <div className="space-y-4">

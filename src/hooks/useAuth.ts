@@ -7,6 +7,7 @@ import {
   User,
 } from 'firebase/auth';
 import { auth, isFirebaseConfigured } from '@/utils/firebase';
+import { migrateLocalStorageToFirestore } from '@/utils/dataService';
 
 /**
  * Firebase Authentication 훅
@@ -26,6 +27,13 @@ export function useAuth() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
+
+      // 로그인 시 localStorage → Firestore 마이그레이션 (백그라운드)
+      if (user) {
+        migrateLocalStorageToFirestore().catch((err) => {
+          console.error('[Auth] 데이터 마이그레이션 실패:', err);
+        });
+      }
     });
 
     return () => unsubscribe();

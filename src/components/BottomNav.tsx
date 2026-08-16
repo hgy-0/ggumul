@@ -52,7 +52,7 @@ export default function BottomNav() {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-neutral-900/95 backdrop-blur-xl border-t border-neutral-800/50 pb-safe">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-bg/95 backdrop-blur-xl border-t border-border pb-safe">
       <div className="max-w-2xl mx-auto px-4">
         <div className="flex items-center justify-around h-16">
           {tabs.map((tab) => {
@@ -64,7 +64,7 @@ export default function BottomNav() {
                 className={`flex flex-col items-center justify-center gap-1 px-6 py-2 rounded-lg transition-all min-w-[64px] min-h-[48px] ${
                   active
                     ? 'text-primary-400'
-                    : 'text-neutral-500 hover:text-neutral-300'
+                    : 'text-muted hover:text-text'
                 }`}
               >
                 {tab.icon(active)}

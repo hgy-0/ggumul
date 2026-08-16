@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { haptic } from '@/utils/haptic';
-import type { Goal } from '@/types';
+import type { Goal, ExemptReason } from '@/types';
+
 import { getGoal } from '@/api/goals';
 import { useGoalStore } from '@/stores/goalStore';
 import { useRevivalCard } from '@/api/attempts';
@@ -9,6 +10,9 @@ import { getTodayString } from '@/utils/dateUtils';
 import RevivalCardBadge from '@/components/RevivalCardBadge';
 import StreakBadge from '@/components/StreakBadge';
 import RevivalModal from '@/components/RevivalModal';
+import ExemptModal from '@/components/ExemptModal';
+import { createExemption, cancelExemption } from '@/utils/dataService';
+import { useExemptionStatus } from '@/hooks/useExemptionStatus';
 
 /**
  * 목표 상세 페이지
@@ -22,7 +26,11 @@ export default function GoalDetail() {
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showRevivalModal, setShowRevivalModal] = useState(false);
+  const [showExemptModal, setShowExemptModal] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // 면제 가능 여부 계산
+  const { remainingCount, canUse: canUseExempt, blockedReason } = useExemptionStatus();
 
   // 메뉴 외부 클릭 시 닫기
   useEffect(() => {
@@ -78,8 +86,31 @@ export default function GoalDetail() {
     }
   };
 
+  const handleExemptSubmit = async (reason: ExemptReason) => {
+    if (!goal) return;
+    try {
+      await createExemption(getTodayString(), reason);
+      setShowExemptModal(false);
+      await loadGoal();
+      await fetchGoals();
+    } catch (error) {
+      console.error('[GoalDetail] 면제 처리 중 오류:', error);
+    }
+  };
+
+  const handleCancelExempt = async () => {
+    if (!goal) return;
+    haptic.medium();
+    if (!window.confirm('면제를 취소하고 시작할까요?')) return;
+    await cancelExemption(getTodayString());
+    await loadGoal();
+    await fetchGoals();
+    navigate(`/goals/${id}/countdown`);
+  };
+
   // Streak에 따른 동기부여 문구
-  const getMotivationMessage = (streak: number, todaySuccess: boolean) => {
+  const getMotivationMessage = (streak: number, todaySuccess: boolean, todayExempt: boolean) => {
+    if (todayExempt) return '오늘은 쉬어가는 날이에요. streak은 유지돼요!';
     if (todaySuccess) {
       if (streak >= 30) return '한 달 넘게 이어가고 있어요. 대단해요!';
       if (streak >= 7) return '꾸준함이 빛나고 있어요!';
@@ -93,7 +124,8 @@ export default function GoalDetail() {
   };
 
   // Streak에 따른 카드 스타일
-  const getStreakCardStyle = (streak: number) => {
+  const getStreakCardStyle = (streak: number, todayExempt: boolean) => {
+    if (todayExempt) return 'bg-primary-500/5 border-primary-500/20';
     if (streak >= 30) return 'bg-success-500/5 border-success-500/20';
     if (streak >= 7) return 'bg-primary-500/5 border-primary-500/20';
     return 'bg-surface border-border';
@@ -133,6 +165,9 @@ export default function GoalDetail() {
 
   const progressPercent = getProgressPercent(goal.current_streak, goal.best_streak);
   const isNewRecord = goal.current_streak > 0 && goal.current_streak >= goal.best_streak;
+
+  // 메뉴에서 "오늘 쉬기" 표시 조건
+  const canShowRestMenu = !goal.today_attempted && !goal.today_success && !goal.today_exempt;
 
   return (
     <div className="pb-24 space-y-5 animate-slide-up">
@@ -178,6 +213,23 @@ export default function GoalDetail() {
                   수정하기
                 </button>
 
+                {/* 오늘 쉬기 메뉴 항목 */}
+                {canShowRestMenu && (
+                  <>
+                    <div className="h-px bg-border" />
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setShowExemptModal(true);
+                      }}
+                      className="w-full px-4 py-3 text-left text-text hover:bg-bg transition-colors flex items-center gap-3"
+                    >
+                      <span className="text-base">😌</span>
+                      오늘 쉬기
+                    </button>
+                  </>
+                )}
+
                 <div className="h-px bg-border" />
 
                 <button
@@ -203,13 +255,20 @@ export default function GoalDetail() {
 
       <div className="space-y-5">
         {/* Streak Hero 카드 */}
-        <div className={`rounded-2xl p-6 shadow-sm border ${getStreakCardStyle(goal.current_streak)}`}>
+        <div className={`rounded-2xl p-6 shadow-sm border ${getStreakCardStyle(goal.current_streak, goal.today_exempt)}`}>
           {/* 오늘 완료 시 상단 바 */}
           {goal.today_success && (
             <div className="h-1 -mt-6 -mx-6 mb-5 rounded-t-2xl bg-gradient-to-r from-success-500 to-emerald-400" />
           )}
+          {/* 면제 시 상단 바 */}
+          {goal.today_exempt && !goal.today_success && (
+            <div className="h-1 -mt-6 -mx-6 mb-5 rounded-t-2xl bg-gradient-to-r from-primary-400/40 to-primary-600/40" />
+          )}
 
           <div className="text-center">
+            {goal.today_exempt && (
+              <div className="text-sm text-primary-500 font-medium mb-2">😌 오늘 면제</div>
+            )}
             <div className="text-sm text-muted mb-1">현재 연속</div>
             <div className="flex items-baseline justify-center gap-2">
               <span className="text-5xl font-bold tracking-tight text-text">{goal.current_streak}</span>
@@ -240,7 +299,7 @@ export default function GoalDetail() {
 
           {/* 동기부여 문구 */}
           <p className="mt-4 text-center text-sm text-muted">
-            {getMotivationMessage(goal.current_streak, goal.today_success)}
+            {getMotivationMessage(goal.current_streak, goal.today_success, goal.today_exempt)}
           </p>
 
           {/* 첫 행동 */}
@@ -318,6 +377,18 @@ export default function GoalDetail() {
               상세 통계 보기
             </button>
           </>
+        ) : goal.today_exempt ? (
+          <>
+            <div className="w-full py-4 rounded-2xl bg-primary-500/10 border border-primary-500/20 text-center">
+              <span className="text-primary-500 font-semibold">😌 오늘은 쉬는 날이에요</span>
+            </div>
+            <button
+              onClick={handleCancelExempt}
+              className="w-full py-3 rounded-2xl bg-surface border border-border text-text font-medium transition-all active:scale-[0.98] hover:bg-bg flex items-center justify-center gap-2"
+            >
+              면제 취소하고 시작하기
+            </button>
+          </>
         ) : goal.today_attempted ? (
           <>
             <button
@@ -374,6 +445,17 @@ export default function GoalDetail() {
           remainingCards={goal.revival_cards}
           onUse={handleRevivalUse}
           onSkip={() => setShowRevivalModal(false)}
+        />
+      )}
+
+      {/* 면제 모달 */}
+      {showExemptModal && (
+        <ExemptModal
+          remainingCount={remainingCount}
+          canUse={canUseExempt}
+          blockedReason={blockedReason}
+          onSubmit={handleExemptSubmit}
+          onClose={() => setShowExemptModal(false)}
         />
       )}
     </div>

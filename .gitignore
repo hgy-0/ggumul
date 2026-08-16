@@ -21,3 +21,6 @@ dev-dist
 # Logs
 *.log
 npm-debug.log*
+.vercel
+
+.omc/

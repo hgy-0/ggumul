@@ -103,7 +103,7 @@ export function setupForegroundMessageListener() {
 
     const notificationTitle = payload.notification?.title || '꾸물 알림';
     const notificationOptions = {
-      body: payload.notification?.body || '',
+      body: payload.notification?.body || '탭하면 바로 카운트다운이 시작돼요 ⏱️',
       icon: '/icon-192.png',
       badge: '/icon-192.png',
       tag: payload.data?.goalId || 'default',

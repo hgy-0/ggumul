@@ -137,8 +137,8 @@ export function checkAndShowNotifications(): void {
       schedule.minute === currentMinute
     ) {
       showNotification(
-        '꾸물 알림',
-        `"${schedule.goalName}" 시작할 시간이에요!`,
+        `${schedule.goalName} 시작할 시간이에요!`,
+        '탭하면 바로 카운트다운이 시작돼요 ⏱️',
         { goalId: schedule.goalId }
       );
     }

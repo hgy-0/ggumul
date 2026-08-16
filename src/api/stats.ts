@@ -1,11 +1,12 @@
 import client from './client';
-import { localAttempts } from '@/utils/localStorage';
+import { attempts as dataAttempts } from '@/utils/dataService';
 
 export const getTodayStats = async () => {
   if (import.meta.env.VITE_SINGLE_FILE) {
     const today = new Date().toISOString().split('T')[0];
-    const allAttempts = localAttempts.getAll();
-    const todayAttempts = allAttempts.filter(a => a.attempted_date === today);
+    const allAttempts = await dataAttempts.getAll();
+    // 면제 기록 제외한 실제 시도만 통계에 포함
+    const todayAttempts = allAttempts.filter(a => a.attempted_date === today && !a.is_exempt);
 
     const total_successes = todayAttempts.filter(a => a.success).length;
     const total_attempts = todayAttempts.length;
@@ -16,7 +17,7 @@ export const getTodayStats = async () => {
       total_successes,
       total_attempts,
       success_rate,
-      unique_devices: 1, // localStorage 모드는 단일 기기
+      unique_devices: 1,
     };
   }
 
@@ -30,12 +31,12 @@ export const getMyStats = async () => {
     const sevenDaysAgo = new Date(today);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
 
-    const allAttempts = localAttempts.getAll();
+    const allAttempts = await dataAttempts.getAll();
 
-    // 최근 7일 데이터 필터링
+    // 최근 7일 데이터 필터링 (면제 기록 제외)
     const recentAttempts = allAttempts.filter(a => {
       const attemptDate = new Date(a.attempted_date);
-      return attemptDate >= sevenDaysAgo && attemptDate <= today;
+      return attemptDate >= sevenDaysAgo && attemptDate <= today && !a.is_exempt;
     });
 
     const total_attempts = recentAttempts.length;
@@ -57,7 +58,6 @@ export const getMyStats = async () => {
       });
     }
 
-    // localStorage 모드에서는 비교 대상이 없으므로 자신과 비교
     const average_success_rate = success_rate;
     const difference = 0;
     const percentage_better = 0;

@@ -3,7 +3,7 @@ import { haptic } from '@/utils/haptic';
 import type { FailureReason } from '@/types';
 
 interface FailureModalProps {
-  onSubmit: (reason: FailureReason, memo?: string) => void | Promise<void>;
+  onSubmit: (reason: FailureReason) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -21,14 +21,13 @@ const FAILURE_PRESETS: { value: FailureReason; label: string; emoji: string }[] 
  */
 export default function FailureModal({ onSubmit, onClose }: FailureModalProps) {
   const [selected, setSelected] = useState<FailureReason | null>(null);
-  const [memo, setMemo] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
     if (!selected || submitting) return;
     setSubmitting(true);
     try {
-      await onSubmit(selected, memo || undefined);
+      await onSubmit(selected);
     } finally {
       setSubmitting(false);
     }
@@ -41,11 +40,11 @@ export default function FailureModal({ onSubmit, onClose }: FailureModalProps) {
 
       {/* 바텀 시트 */}
       <div className="fixed bottom-0 left-0 right-0 z-50 animate-slide-up">
-        <div className="max-w-md mx-auto bg-neutral-800 rounded-t-card-lg p-6 border-t border-neutral-700">
-          <h3 className="text-title text-neutral-100 mb-1">
+        <div className="max-w-md mx-auto bg-surface rounded-t-card-lg p-6 border-t border-border">
+          <h3 className="text-title text-text mb-1">
             다음엔 꼭 해낼 수 있어요
           </h3>
-          <p className="text-caption text-neutral-400 mb-5">
+          <p className="text-caption text-muted mb-5">
             오늘 무슨 일이 있었는지 기록해두면<br />다음엔 더 잘 준비할 수 있어요
           </p>
 
@@ -61,7 +60,7 @@ export default function FailureModal({ onSubmit, onClose }: FailureModalProps) {
                 className={`p-3 rounded-btn text-left transition-all ${
                   selected === preset.value
                     ? 'bg-primary-500/20 border-primary-500 border text-primary-300'
-                    : 'bg-neutral-700 border border-neutral-600 text-neutral-300 hover:bg-neutral-600'
+                    : 'bg-bg border border-border text-text hover:bg-surface'
                 }`}
               >
                 <span className="text-body">
@@ -70,14 +69,6 @@ export default function FailureModal({ onSubmit, onClose }: FailureModalProps) {
               </button>
             ))}
           </div>
-
-          {/* 자유 메모 */}
-          <textarea
-            className="input resize-none h-20 mb-4"
-            placeholder="더 남기고 싶은 말이 있나요?"
-            value={memo}
-            onChange={(e) => setMemo(e.target.value)}
-          />
 
           {/* 액션 버튼들 */}
           <div className="flex gap-3">

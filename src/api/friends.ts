@@ -23,6 +23,14 @@ export interface AcceptInviteResponse {
   message: string;
 }
 
+export interface Cheer {
+  id: string;
+  from_device_id: string;
+  from_nickname: string | null;
+  emoji: string;
+  created_at: string;
+}
+
 /**
  * 초대 코드 생성
  */
@@ -85,4 +93,43 @@ export const removeFriend = async (friendDeviceId: string): Promise<{ success: b
 
   const response = await client.delete(`/friends/${friendDeviceId}`);
   return response.data;
+};
+
+/**
+ * 응원 보내기
+ */
+export const sendCheer = async (friendDeviceId: string, emoji: string): Promise<void> => {
+  if (import.meta.env.VITE_SINGLE_FILE) {
+    if (!isFirebaseConfigured()) {
+      throw new Error('Firebase 설정이 필요합니다.');
+    }
+    return firebaseFriends.sendCheer(friendDeviceId, emoji);
+  }
+
+  await client.post(`/friends/${friendDeviceId}/cheer`, { emoji });
+};
+
+/**
+ * 읽지 않은 응원 조회
+ */
+export const getUnreadCheers = async (): Promise<Cheer[]> => {
+  if (import.meta.env.VITE_SINGLE_FILE) {
+    if (!isFirebaseConfigured()) return [];
+    return firebaseFriends.getUnreadCheers();
+  }
+
+  const response = await client.get('/friends/cheers/unread');
+  return response.data;
+};
+
+/**
+ * 응원 읽음 처리
+ */
+export const markCheersAsRead = async (cheerIds: string[]): Promise<void> => {
+  if (import.meta.env.VITE_SINGLE_FILE) {
+    if (!isFirebaseConfigured()) return;
+    return firebaseFriends.markCheersAsRead(cheerIds);
+  }
+
+  await client.post('/friends/cheers/read', { cheer_ids: cheerIds });
 };

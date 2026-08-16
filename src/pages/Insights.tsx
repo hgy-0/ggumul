@@ -152,6 +152,15 @@ export default function Insights() {
         colorClass="gradient-primary"
       />
 
+      {/* 면제 통계 차트 */}
+      {data.exempt_count > 0 && (
+        <InsightChart
+          title="면제 사유"
+          data={data.exempt_by_reason}
+          colorClass="gradient-primary"
+        />
+      )}
+
       {/* 팁 */}
       {data.tips.length > 0 && (
         <div className="card p-4">

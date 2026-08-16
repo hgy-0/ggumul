@@ -6,7 +6,13 @@ import { useGoalStore } from '@/stores/goalStore';
 import { getGoal } from '@/api/goals';
 import { haptic } from '@/utils/haptic';
 import Timer from '@/components/Timer';
-import type { Goal } from '@/types';
+import ExemptModal from '@/components/ExemptModal';
+import { createExemption } from '@/utils/dataService';
+import { useExemptionStatus } from '@/hooks/useExemptionStatus';
+import { getTodayString } from '@/utils/dateUtils';
+import { getUnreadCheers, type Cheer } from '@/api/friends';
+import type { Goal, ExemptReason } from '@/types';
+import { MONTHLY_EXEMPTION_LIMIT } from '@/types';
 
 /**
  * 카운트다운 페이지.
@@ -24,6 +30,16 @@ export default function Countdown() {
   const [goal, setGoal] = useState<Goal | null>(null);
   const [loading, setLoading] = useState(true);
   const [ready, setReady] = useState(false);
+  const [showGiveUpChoice, setShowGiveUpChoice] = useState(false);
+  const [showExemptModal, setShowExemptModal] = useState(false);
+  const [cheers, setCheers] = useState<Cheer[]>([]);
+
+  // 면제 가능 여부 계산
+  const { remainingCount, canUse: canUseExempt, blockedReason } = useExemptionStatus();
+
+  useEffect(() => {
+    getUnreadCheers().then(setCheers).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const init = async () => {
@@ -72,6 +88,19 @@ export default function Countdown() {
     navigate(`/goals/${goalId}/result?success=false`);
   };
 
+  const handleGiveUpButtonClick = () => {
+    haptic.light();
+    setShowGiveUpChoice(true);
+  };
+
+  const handleExemptSubmit = async (reason: ExemptReason) => {
+    await createExemption(getTodayString(), reason);
+    setShowExemptModal(false);
+    clearTimer();
+    await fetchGoals();
+    navigate('/');
+  };
+
   if (loading || !goal) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -95,11 +124,22 @@ export default function Countdown() {
         />
       </div>
 
+      {/* 응원 메시지 */}
+      {cheers.length > 0 && (
+        <div className="mb-4 px-4 py-2.5 rounded-xl bg-primary-500/10 border border-primary-500/20 backdrop-blur-sm relative z-10 max-w-xs animate-slide-up">
+          <p className="text-sm text-primary-300 text-center">
+            {cheers.length === 1
+              ? `${cheers[0].from_nickname || '친구'}님이 ${cheers[0].emoji}을 보내며 응원하고 있어요!`
+              : `${cheers[0].from_nickname || '친구'}님 외 ${cheers.length - 1}명이 응원하고 있어요! ${cheers.slice(0, 3).map(c => c.emoji).join('')}`}
+          </p>
+        </div>
+      )}
+
       {/* 긴장감 메시지 */}
-      <p className="text-sm text-neutral-500 uppercase tracking-widest mb-2 relative z-10">
+      <p className="text-sm text-muted uppercase tracking-widest mb-2 relative z-10">
         {remaining <= 30 ? '⚠️ 거의 다 갔어요!' : '지금이에요'}
       </p>
-      <h2 className="text-2xl font-bold text-neutral-100 mb-6 text-center relative z-10">
+      <h2 className="text-2xl font-bold text-text mb-6 text-center relative z-10">
         {goal.name}
       </h2>
 
@@ -135,12 +175,80 @@ export default function Countdown() {
           시작했어요!
         </button>
         <button
-          onClick={handleGiveUp}
-          className="w-full py-3 rounded-xl text-neutral-600 text-sm hover:text-neutral-400 transition-colors"
+          onClick={handleGiveUpButtonClick}
+          className="w-full py-3 rounded-xl text-muted text-sm hover:text-text transition-colors"
         >
           오늘은 쉴게요
         </button>
       </div>
+
+      {/* 포기 선택 바텀시트 */}
+      {showGiveUpChoice && !showExemptModal && (
+        <>
+          <div
+            className="overlay-dark animate-fade-in"
+            onClick={() => setShowGiveUpChoice(false)}
+          />
+          <div className="fixed bottom-0 left-0 right-0 z-50 animate-slide-up">
+            <div className="max-w-md mx-auto bg-surface rounded-t-card-lg p-6 border-t border-border">
+              <h3 className="text-title text-text mb-5">어떤 상황인가요?</h3>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    setShowGiveUpChoice(false);
+                    handleGiveUp();
+                  }}
+                  className="w-full p-4 rounded-xl bg-bg border border-border text-left transition-all hover:bg-surface active:scale-[0.98]"
+                >
+                  <div className="font-semibold text-text mb-0.5">다음에 할게요</div>
+                  <div className="text-caption text-muted">실패로 기록돼요</div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (!canUseExempt) return;
+                    setShowGiveUpChoice(false);
+                    setShowExemptModal(true);
+                  }}
+                  disabled={!canUseExempt}
+                  className={`w-full p-4 rounded-xl text-left transition-all active:scale-[0.98] ${
+                    canUseExempt
+                      ? 'bg-bg border border-border hover:bg-surface'
+                      : 'bg-bg border border-border opacity-50 cursor-not-allowed'
+                  }`}
+                >
+                  <div className={`font-semibold mb-0.5 ${canUseExempt ? 'text-text' : 'text-muted'}`}>
+                    오늘은 사정이 있어요
+                    {canUseExempt && (
+                      <span className="ml-2 text-xs text-primary-500">
+                        ({remainingCount}/{MONTHLY_EXEMPTION_LIMIT} 남음)
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-caption text-muted">
+                    {canUseExempt ? 'streak이 유지돼요' : blockedReason || '면제를 사용할 수 없어요'}
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 면제 모달 */}
+      {showExemptModal && (
+        <ExemptModal
+          remainingCount={remainingCount}
+          canUse={canUseExempt}
+          blockedReason={blockedReason}
+          onSubmit={handleExemptSubmit}
+          onClose={() => {
+            setShowExemptModal(false);
+            setShowGiveUpChoice(true);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
-import { getFriends, removeFriend, type Friend } from '@/api/friends';
+import { getFriends, removeFriend, sendCheer, type Friend } from '@/api/friends';
+import { haptic } from '@/utils/haptic';
+
+const CHEER_EMOJIS = ['👏', '🔥', '💪', '🎉', '❤️'];
 
 export default function FriendsList() {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [cheerOpen, setCheerOpen] = useState<string | null>(null);
+  const [cheerSent, setCheerSent] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadFriends();
@@ -37,6 +42,26 @@ export default function FriendsList() {
     } catch (err) {
       console.error('Failed to remove friend:', err);
       alert('친구 삭제에 실패했습니다.');
+    }
+  };
+
+  const handleCheer = async (friendDeviceId: string, emoji: string) => {
+    try {
+      haptic.light();
+      await sendCheer(friendDeviceId, emoji);
+      setCheerSent((prev) => ({ ...prev, [friendDeviceId]: emoji }));
+      setCheerOpen(null);
+      // 2초 후 전송 표시 초기화
+      setTimeout(() => {
+        setCheerSent((prev) => {
+          const next = { ...prev };
+          delete next[friendDeviceId];
+          return next;
+        });
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to send cheer:', err);
+      alert('응원 전송에 실패했습니다.');
     }
   };
 
@@ -109,10 +134,15 @@ export default function FriendsList() {
   }
 
   return (
-    <div className="space-y-3">
-      {friends.map((friend, index) => {
+    <div className="space-y-3" onClick={(e) => {
+      // 이모지 선택 영역 바깥 클릭 시 닫기
+      if (cheerOpen && !(e.target as HTMLElement).closest('[data-cheer-area]')) {
+        setCheerOpen(null);
+      }
+    }}>
+      {friends.map((friend) => {
         const status = getFriendStatus(friend);
-        const displayName = friend.nickname || `친구 ${index + 1}`;
+        const displayName = friend.nickname || '친구';
         const isMenuOpen = menuOpen === friend.device_id;
 
         return (
@@ -166,16 +196,37 @@ export default function FriendsList() {
               </div>
             </div>
 
-            {/* 하단: 행동 버튼 */}
-            <div className="flex items-center gap-2">
-              <button
-                className="flex-1 px-4 py-2 rounded-xl bg-surface/50 hover:bg-surface border border-border text-sm font-medium text-text transition-all"
-                onClick={() => alert('응원 기능은 곧 추가될 예정이에요!')}
-              >
-                {status.subMessage}
-              </button>
+            {/* 하단: 응원 버튼 */}
+            <div className="flex items-center gap-2" data-cheer-area>
+              {cheerSent[friend.device_id] ? (
+                <div className="flex-1 px-4 py-2 rounded-xl bg-primary-500/10 border border-primary-500/20 text-sm font-medium text-primary-500 text-center transition-all animate-slide-up">
+                  {cheerSent[friend.device_id]} 응원을 보냈어요!
+                </div>
+              ) : cheerOpen === friend.device_id ? (
+                <div className="flex-1 flex items-center gap-1 animate-slide-up">
+                  {CHEER_EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => handleCheer(friend.device_id, emoji)}
+                      className="flex-1 py-2 rounded-xl bg-surface/50 hover:bg-surface border border-border text-xl transition-all active:scale-90"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <button
+                  className="flex-1 px-4 py-2 rounded-xl bg-surface/50 hover:bg-surface border border-border text-sm font-medium text-text transition-all active:scale-95"
+                  onClick={() => {
+                    haptic.light();
+                    setCheerOpen(friend.device_id);
+                  }}
+                >
+                  {status.subMessage}
+                </button>
+              )}
 
-              {friend.success_rate > 0 && (
+              {friend.success_rate > 0 && !cheerOpen && !cheerSent[friend.device_id] && (
                 <div className="px-3 py-2 rounded-xl bg-surface/30 border border-border text-xs text-muted whitespace-nowrap">
                   성공률 {Math.round(friend.success_rate * 100)}%
                 </div>

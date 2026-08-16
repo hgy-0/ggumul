@@ -15,6 +15,7 @@ import Countdown from '@/pages/Countdown';
 import Result from '@/pages/Result';
 import Insights from '@/pages/Insights';
 import Friends from '@/pages/Friends';
+import Onboarding from '@/pages/Onboarding';
 
 /**
  * 앱 루트 컴포넌트.
@@ -51,6 +52,7 @@ export default function App() {
 
   return (
     <Routes>
+      <Route path="/onboarding" element={<Onboarding />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/stats" element={<Stats />} />

@@ -329,7 +329,6 @@ export default function NotificationSettings({
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <span className="text-xs text-muted mr-1">수정</span>
                       <button
                         type="button"
                         onClick={(e) => {

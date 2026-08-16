@@ -9,6 +9,7 @@ import {
   saveGoalToFirestore,
   deleteGoalFromFirestore,
 } from '@/utils/firestoreGoals';
+import { syncUserProfile } from '@/utils/firebaseFriends';
 
 interface GoalStore {
   goals: Goal[];
@@ -38,6 +39,8 @@ export const useGoalStore = create<GoalStore>((set) => ({
     try {
       const goals = await goalsApi.getGoals();
       set({ goals, loading: false });
+      // 공개 프로필 동기화 (친구에게 보이는 통계)
+      syncUserProfile(goals).catch(() => {});
     } catch (err) {
       const message = err instanceof Error ? err.message : '목표를 불러오지 못했습니다.';
       set({ error: message, loading: false });

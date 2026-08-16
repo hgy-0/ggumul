@@ -3,14 +3,17 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, HashRouter } from 'react-router-dom';
 import App from './App';
 import './index.css';
-import { initializeSampleData } from '@/utils/localStorage';
+
 
 const Router = import.meta.env.VITE_SINGLE_FILE ? HashRouter : BrowserRouter;
 
-// 싱글파일 모드에서 샘플 데이터 초기화
-if (import.meta.env.VITE_SINGLE_FILE) {
-  initializeSampleData();
+// 기존 사용자는 온보딩 건너뛰기 (이미 데이터가 있는 경우)
+if (localStorage.getItem('ggumul_goals') && !localStorage.getItem('ggumul_onboarding_done')) {
+  localStorage.setItem('ggumul_onboarding_done', 'true');
 }
+
+// 싱글파일 모드에서 샘플 데이터 초기화는 온보딩 이후에만
+// (온보딩 완료 후 GoalForm에서 직접 목표를 만드므로 샘플 불필요)
 
 // 서비스 워커 등록 (푸시 알림에 필요)
 // 싱글파일 프리뷰에서는 서비스 워커 비활성화

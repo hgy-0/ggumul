@@ -409,12 +409,22 @@
 }
 
 /* ── Skeleton Loading ────────────────────────────────────── */
+:root {
+  --skeleton-base: rgba(229, 231, 235, 1);
+  --skeleton-shine: rgba(209, 213, 219, 1);
+}
+
+:root.dark {
+  --skeleton-base: rgba(38, 38, 38, 1);
+  --skeleton-shine: rgba(64, 64, 64, 1);
+}
+
 .skeleton {
   background: linear-gradient(
     90deg,
-    rgba(38, 38, 38, 1) 25%,
-    rgba(64, 64, 64, 1) 50%,
-    rgba(38, 38, 38, 1) 75%
+    var(--skeleton-base) 25%,
+    var(--skeleton-shine) 50%,
+    var(--skeleton-base) 75%
   );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;

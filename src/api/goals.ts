@@ -1,16 +1,25 @@
 import client from './client';
 import type { Goal, GoalCreateUpdate } from '@/types';
-import { localGoals, localAttempts, calculateStreak, getTopPriorityGoalId } from '@/utils/localStorage';
+import {
+  goals as dataGoals,
+  attempts as dataAttempts,
+  calculateStreak,
+  getTopPriorityGoalId,
+  getMonthlyExemptionCount,
+} from '@/utils/dataService';
+import type { StoredGoal } from '@/utils/localStorage';
 
-// localStorage 버전 헬퍼
-function buildGoalResponse(storedGoal: ReturnType<typeof localGoals.getById>): Goal | null {
+// dataService 기반 헬퍼 (async)
+async function buildGoalResponse(storedGoal: StoredGoal | undefined): Promise<Goal | null> {
   if (!storedGoal) return null;
 
   const today = new Date().toISOString().split('T')[0];
-  const todayAttempt = localAttempts.getByDate(storedGoal.id, today);
-  const { current, best } = calculateStreak(storedGoal.id);
-  const allGoals = localGoals.getAll();
-  const topPriorityId = getTopPriorityGoalId(allGoals);
+  const todayAttempt = await dataAttempts.getByDate(storedGoal.id, today);
+  const { current, best } = await calculateStreak(storedGoal.id);
+  const allGoals = await dataGoals.getAll();
+  const topPriorityId = await getTopPriorityGoalId(allGoals);
+  const todayExempt = !!(todayAttempt?.is_exempt);
+  const monthlyExemptionsUsed = await getMonthlyExemptionCount();
 
   return {
     ...storedGoal,
@@ -18,6 +27,8 @@ function buildGoalResponse(storedGoal: ReturnType<typeof localGoals.getById>): G
     best_streak: best,
     today_attempted: !!todayAttempt,
     today_success: todayAttempt?.success || false,
+    today_exempt: todayExempt,
+    monthly_exemptions_used: monthlyExemptionsUsed,
     is_top_priority: storedGoal.id === topPriorityId,
   };
 }
@@ -25,8 +36,10 @@ function buildGoalResponse(storedGoal: ReturnType<typeof localGoals.getById>): G
 /** 전체 목표 목록 조회 */
 export async function getGoals(): Promise<Goal[]> {
   if (import.meta.env.VITE_SINGLE_FILE) {
-    const storedGoals = localGoals.getAll().filter(g => g.is_active);
-    return storedGoals.map(g => buildGoalResponse(g)!).filter(Boolean);
+    const storedGoals = await dataGoals.getAll();
+    const activeGoals = storedGoals.filter(g => g.is_active);
+    const results = await Promise.all(activeGoals.map(g => buildGoalResponse(g)));
+    return results.filter(Boolean) as Goal[];
   }
 
   const { data } = await client.get<Goal[]>('/goals');
@@ -36,7 +49,8 @@ export async function getGoals(): Promise<Goal[]> {
 /** 개별 목표 조회 */
 export async function getGoal(id: number): Promise<Goal> {
   if (import.meta.env.VITE_SINGLE_FILE) {
-    const goal = buildGoalResponse(localGoals.getById(id));
+    const storedGoal = await dataGoals.getById(id);
+    const goal = await buildGoalResponse(storedGoal);
     if (!goal) throw new Error('Goal not found');
     return goal;
   }
@@ -48,8 +62,8 @@ export async function getGoal(id: number): Promise<Goal> {
 /** 새 목표 생성 */
 export async function createGoal(payload: GoalCreateUpdate): Promise<Goal> {
   if (import.meta.env.VITE_SINGLE_FILE) {
-    const storedGoal = localGoals.create(payload);
-    return buildGoalResponse(storedGoal)!;
+    const storedGoal = await dataGoals.create(payload);
+    return (await buildGoalResponse(storedGoal))!;
   }
 
   const { data } = await client.post<Goal>('/goals', payload);
@@ -59,9 +73,9 @@ export async function createGoal(payload: GoalCreateUpdate): Promise<Goal> {
 /** 목표 수정 */
 export async function updateGoal(id: number, payload: Partial<GoalCreateUpdate>): Promise<Goal> {
   if (import.meta.env.VITE_SINGLE_FILE) {
-    const updated = localGoals.update(id, payload as any);
+    const updated = await dataGoals.update(id, payload as any);
     if (!updated) throw new Error('Goal not found');
-    return buildGoalResponse(updated)!;
+    return (await buildGoalResponse(updated))!;
   }
 
   const { data } = await client.put<Goal>(`/goals/${id}`, payload);
@@ -71,7 +85,7 @@ export async function updateGoal(id: number, payload: Partial<GoalCreateUpdate>)
 /** 목표 삭제 */
 export async function deleteGoal(id: number): Promise<void> {
   if (import.meta.env.VITE_SINGLE_FILE) {
-    localGoals.delete(id);
+    await dataGoals.delete(id);
     return;
   }
 
@@ -83,6 +97,7 @@ export interface DailyAttemptStat {
   date: string;
   attempted: boolean;
   success: boolean;
+  exempt: boolean;
 }
 
 export interface GoalStats {
@@ -99,11 +114,11 @@ export interface GoalStats {
 /** 목표별 최근 7일 통계 조회 */
 export async function getGoalStats(goalId: number): Promise<GoalStats> {
   if (import.meta.env.VITE_SINGLE_FILE) {
-    const goal = localGoals.getById(goalId);
+    const goal = await dataGoals.getById(goalId);
     if (!goal) throw new Error('Goal not found');
 
-    const attempts = localAttempts.getByGoalId(goalId);
-    const { current, best } = calculateStreak(goalId);
+    const goalAttempts = await dataAttempts.getByGoalId(goalId);
+    const { current, best } = await calculateStreak(goalId);
 
     // 최근 7일 계산
     const today = new Date();
@@ -116,17 +131,19 @@ export async function getGoalStats(goalId: number): Promise<GoalStats> {
       checkDate.setDate(checkDate.getDate() + i);
       const dateStr = checkDate.toISOString().split('T')[0];
 
-      const attempt = attempts.find(a => a.attempted_date === dateStr);
+      const attempt = goalAttempts.find(a => a.attempted_date === dateStr);
       daily_stats.push({
         date: dateStr,
         attempted: !!attempt,
         success: attempt?.success || false,
+        exempt: attempt?.is_exempt || false,
       });
     }
 
-    const recentAttempts = attempts.filter(a => {
+    // 면제 기록 제외한 실제 시도만 통계에 포함
+    const recentAttempts = goalAttempts.filter(a => {
       const attemptDate = new Date(a.attempted_date);
-      return attemptDate >= startDate && attemptDate <= today;
+      return attemptDate >= startDate && attemptDate <= today && !a.is_exempt;
     });
 
     const total_successes = recentAttempts.filter(a => a.success).length;

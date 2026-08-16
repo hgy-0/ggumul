@@ -18,6 +18,8 @@ export interface Goal {
   revival_cards: number;
   today_attempted: boolean;
   today_success: boolean;
+  today_exempt: boolean;
+  monthly_exemptions_used: number;
   is_top_priority: boolean;
   notification_schedules: NotificationSchedule[];
 }
@@ -37,13 +39,20 @@ export interface GoalCreateUpdate {
 // 실패 사유 타입
 export type FailureReason = 'tired' | 'forgot' | 'no_time' | 'lazy' | 'other';
 
+// 면제 사유 타입
+export type ExemptReason = 'sick' | 'travel' | 'appointment' | 'rest' | 'other';
+
+// 월간 면제 한도 상수
+export const MONTHLY_EXEMPTION_LIMIT = 3;
+
 // 시도 기록 생성 타입
 export interface AttemptCreate {
   attempted_date: string; // YYYY-MM-DD
   success: boolean;
   failure_reason?: FailureReason;
-  failure_memo?: string;
   use_revival?: boolean;
+  is_exempt?: boolean;
+  exempt_reason?: ExemptReason;
 }
 
 // 인사이트 데이터 타입
@@ -53,6 +62,8 @@ export interface InsightData {
   success_rate: number; // 0~100 범위
   failure_by_reason: Record<string, number>;
   failure_by_day_of_week: Record<string, number>;
+  exempt_count: number;
+  exempt_by_reason: Record<string, number>;
   tips: string[];
 }
 

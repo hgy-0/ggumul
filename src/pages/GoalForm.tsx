@@ -36,6 +36,7 @@ export default function GoalForm() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEdit);
   const [error, setError] = useState<string | null>(null);
+  const [createdGoalId, setCreatedGoalId] = useState<number | null>(null);
 
   // 편집 모드일 때 기존 데이터 로드
   useEffect(() => {
@@ -91,7 +92,8 @@ export default function GoalForm() {
         await updateGoal(Number(id), data);
         goalId = Number(id);
       } else {
-        goalId = await addGoal(data);
+        const newGoal = await addGoal(data);
+        goalId = newGoal.id;
       }
 
       // 알림이 활성화된 경우 Firestore에 스케줄 저장 (실패해도 목표 저장은 유지)
@@ -110,7 +112,11 @@ export default function GoalForm() {
         console.error('[GoalForm] 알림 스케줄 저장 실패 (목표는 저장됨):', err);
       }
 
-      navigate('/');
+      if (isEdit) {
+        navigate('/');
+      } else {
+        setCreatedGoalId(goalId);
+      }
     } catch {
       setError('저장에 실패했어요. 다시 시도해주세요.');
     } finally {
@@ -138,6 +144,37 @@ export default function GoalForm() {
       setLoading(false);
     }
   };
+
+  // 등록 완료 후 즉시 실행 유도 화면
+  if (createdGoalId !== null) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] animate-slide-up">
+        <div className="w-16 h-16 rounded-full bg-primary-500/15 flex items-center justify-center mb-6">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary-500">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-bold text-text mb-2">목표가 등록됐어요!</h2>
+        <p className="text-sm text-muted mb-8 text-center">
+          동기가 가장 높은 지금,<br />바로 시작해볼까요?
+        </p>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <button
+            onClick={() => navigate(`/goals/${createdGoalId}/countdown`)}
+            className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary-500 to-primary-600 text-white text-lg font-bold transition-all active:scale-95 shadow-lg shadow-primary-500/20"
+          >
+            지금 바로 시작하기
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full py-3 rounded-xl text-muted text-sm hover:text-text transition-colors"
+          >
+            나중에 할게요
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (initialLoading) {
     return (
@@ -208,27 +245,41 @@ export default function GoalForm() {
 
       {/* 알림 설정 */}
       <div className="space-y-4">
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={enableNotification}
-            onChange={(e) => {
-              const checked = e.target.checked;
-              setEnableNotification(checked);
-              if (checked) subscribePush();
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-body text-text">알림 받기</span>
+            <p className="text-xs text-muted mt-1">목표 시간에 맞춰 알려드려요</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enableNotification}
+            onClick={() => {
+              const next = !enableNotification;
+              setEnableNotification(next);
+              if (next) subscribePush();
             }}
-            className="w-5 h-5 rounded accent-primary-500"
-          />
-          <span className="text-body text-text">알림 받기</span>
-        </label>
+            className={`relative inline-flex w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${
+              enableNotification ? 'bg-primary-500' : 'bg-border'
+            }`}
+          >
+            <span
+              className={`inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 mt-0.5 ${
+                enableNotification ? 'translate-x-5' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
 
         {enableNotification && (
-          <NotificationSettings
-            notificationDays={notificationDays}
-            setNotificationDays={setNotificationDays}
-            schedules={schedules}
-            setSchedules={setSchedules}
-          />
+          <div className="rounded-2xl border border-border bg-surface p-4">
+            <NotificationSettings
+              notificationDays={notificationDays}
+              setNotificationDays={setNotificationDays}
+              schedules={schedules}
+              setSchedules={setSchedules}
+            />
+          </div>
         )}
       </div>
 
@@ -249,7 +300,7 @@ export default function GoalForm() {
         </button>
         <button
           type="submit"
-          className="btn-primary flex-1"
+          className="btn-primary flex-[2]"
           disabled={loading || !name.trim() || !firstAction.trim()}
         >
           {loading ? '저장 중...' : isEdit ? '저장하기' : '등록하기'}
@@ -258,14 +309,17 @@ export default function GoalForm() {
 
       {/* 삭제 버튼 (편집 모드만) */}
       {isEdit && (
-        <button
-          type="button"
-          onClick={handleDelete}
-          className="btn-danger w-full mt-2"
-          disabled={loading}
-        >
-          목표 삭제
-        </button>
+        <>
+          <div className="border-t border-border mt-6" />
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="btn-danger w-full mt-8"
+            disabled={loading}
+          >
+            목표 삭제
+          </button>
+        </>
       )}
     </form>
   );

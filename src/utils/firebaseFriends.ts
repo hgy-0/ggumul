@@ -7,11 +7,15 @@ import {
   deleteDoc,
   query,
   where,
+  orderBy,
+  limit,
   serverTimestamp,
   Timestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured, auth } from './firebase';
-import type { Friend, InviteCodeResponse, AcceptInviteResponse } from '@/api/friends';
+import type { Friend, InviteCodeResponse, AcceptInviteResponse, Cheer } from '@/api/friends';
+import type { Goal } from '@/types';
 
 // 사용자 ID 가져오기 (로그인된 경우 UID, 아니면 기기 ID)
 export function getUserId(): string {
@@ -40,6 +44,8 @@ const COLLECTIONS = {
   DEVICES: 'devices',
   FRIENDSHIPS: 'friendships',
   INVITE_CODES: 'invite_codes',
+  CHEERS: 'cheers',
+  USER_PROFILES: 'user_profiles',
 };
 
 /**
@@ -196,18 +202,35 @@ export async function getFriends(): Promise<Friend[]> {
     return [];
   }
 
-  // 친구들의 디바이스 정보 조회
+  // 친구들의 프로필 정보 조회
   const friendsData: Friend[] = [];
+  const today = new Date().toDateString();
 
   for (const friendDeviceId of friendDeviceIds) {
+    // user_profiles에서 먼저 조회, 없으면 devices fallback
+    const profileDoc = await getDoc(doc(db, COLLECTIONS.USER_PROFILES, friendDeviceId));
     const deviceDoc = await getDoc(doc(db, COLLECTIONS.DEVICES, friendDeviceId));
 
-    if (deviceDoc.exists()) {
+    if (profileDoc.exists()) {
+      const data = profileDoc.data();
+      // last_updated가 오늘이 아니면 today 통계 초기화
+      const lastUpdated = data.last_updated?.toDate();
+      const isToday = lastUpdated && lastUpdated.toDateString() === today;
+
+      friendsData.push({
+        device_id: friendDeviceId,
+        nickname: data.nickname || data.display_name || null,
+        today_success: isToday ? (data.today_success ?? false) : false,
+        current_streak: data.current_streak ?? 0,
+        success_rate: data.success_rate ?? 0,
+        created_at: lastUpdated?.toISOString() || new Date().toISOString(),
+      });
+    } else if (deviceDoc.exists()) {
       const data = deviceDoc.data();
       friendsData.push({
         device_id: friendDeviceId,
-        nickname: data.nickname || null,
-        today_success: false, // TODO: 실제 통계 연동
+        nickname: data.nickname || data.display_name || null,
+        today_success: false,
         current_streak: 0,
         success_rate: 0,
         created_at: data.last_active?.toDate().toISOString() || new Date().toISOString(),
@@ -216,6 +239,34 @@ export async function getFriends(): Promise<Friend[]> {
   }
 
   return friendsData;
+}
+
+/**
+ * 사용자 공개 프로필 동기화 (친구에게 보이는 통계)
+ */
+export async function syncUserProfile(goals: Goal[]): Promise<void> {
+  if (!isFirebaseConfigured() || !db) return;
+  if (!auth?.currentUser) return;
+
+  const uid = auth.currentUser.uid;
+  const nickname = localStorage.getItem('ggumul_nickname');
+
+  const todayCompleted = goals.filter((g) => g.today_success).length;
+  const todayTotal = goals.length;
+
+  // 최장 연속 기록
+  const maxStreak = goals.reduce((max, g) => Math.max(max, g.current_streak), 0);
+
+  await setDoc(doc(db, COLLECTIONS.USER_PROFILES, uid), {
+    nickname: nickname || null,
+    display_name: auth.currentUser.displayName || null,
+    today_success: todayCompleted > 0,
+    today_total: todayTotal,
+    today_completed: todayCompleted,
+    current_streak: maxStreak,
+    success_rate: 0,
+    last_updated: serverTimestamp(),
+  }, { merge: true });
 }
 
 /**
@@ -238,4 +289,84 @@ export async function removeFriend(friendDeviceId: string): Promise<{ success: b
     success: true,
     message: '친구가 삭제되었습니다.',
   };
+}
+
+/**
+ * 응원 보내기
+ */
+export async function sendCheer(friendDeviceId: string, emoji: string): Promise<void> {
+  if (!isFirebaseConfigured() || !db) {
+    throw new Error('Firebase가 설정되지 않았습니다.');
+  }
+
+  const myDeviceId = getUserId();
+  const myNickname = await getMyDisplayName();
+
+  const cheerId = `${myDeviceId}_${friendDeviceId}_${Date.now()}`;
+
+  await setDoc(doc(db, COLLECTIONS.CHEERS, cheerId), {
+    from_device_id: myDeviceId,
+    to_device_id: friendDeviceId,
+    from_nickname: myNickname,
+    emoji,
+    read: false,
+    created_at: serverTimestamp(),
+  });
+}
+
+/**
+ * 내가 받은 읽지 않은 응원 조회
+ */
+export async function getUnreadCheers(): Promise<Cheer[]> {
+  if (!isFirebaseConfigured() || !db) return [];
+
+  const myDeviceId = getUserId();
+
+  const q = query(
+    collection(db, COLLECTIONS.CHEERS),
+    where('to_device_id', '==', myDeviceId),
+    where('read', '==', false),
+    orderBy('created_at', 'desc'),
+    limit(20)
+  );
+
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      from_device_id: data.from_device_id,
+      from_nickname: data.from_nickname || null,
+      emoji: data.emoji,
+      created_at: data.created_at?.toDate().toISOString() || new Date().toISOString(),
+    };
+  });
+}
+
+/**
+ * 응원 읽음 처리
+ */
+export async function markCheersAsRead(cheerIds: string[]): Promise<void> {
+  if (!isFirebaseConfigured() || !db || cheerIds.length === 0) return;
+
+  const batch = writeBatch(db);
+  for (const id of cheerIds) {
+    batch.update(doc(db, COLLECTIONS.CHEERS, id), { read: true });
+  }
+  await batch.commit();
+}
+
+/**
+ * 내 표시 이름 가져오기 (닉네임 > 구글 이름 > '친구')
+ */
+async function getMyDisplayName(): Promise<string> {
+  const nickname = localStorage.getItem('ggumul_nickname');
+  if (nickname) return nickname;
+
+  if (auth?.currentUser?.displayName) {
+    return auth.currentUser.displayName;
+  }
+
+  return '친구';
 }
