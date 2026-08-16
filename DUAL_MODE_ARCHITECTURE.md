@@ -20,6 +20,11 @@
 
 ## 현재 상태
 
+> **2026-08-16 업데이트**: 아래 "남은 작업"은 사실상 완료됨.
+> - 전 API(`goals`/`attempts`/`insights`/`notifications`/`stats`/`friends`/`devices`) 로컬 분기 완료
+> - `utils/dataService.ts`가 인증 여부로 localStorage ↔ Firestore 자동 라우팅 (로그인 시 일회성 마이그레이션 포함) — 아키텍처가 "싱글파일 env 분기"에서 "게스트/로그인 듀얼 모드"로 확장됨
+> - 전체 플로우 테스트: `frontend`에서 `npm run test:guest` (스모크 13케이스, 목표 CRUD·streak·부활카드·면제 검증)
+
 ### ✅ 완료된 작업
 
 1. **싱글파일 빌드 시스템** (`SINGLEFILE_PREVIEW_BUILD.md` 참고)
