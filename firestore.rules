@@ -2,24 +2,118 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /friends/{friendId} {
-      allow read, write: if true;
+    // ---- 헬퍼 ----
+    function signedIn() {
+      return request.auth != null;
     }
 
-    match /invite_codes/{code} {
-      allow read, write: if true;
+    // 본인 여부 (로그인 시 device id == auth uid)
+    function isMe(id) {
+      return signedIn() && request.auth.uid == id;
     }
 
-    match /devices/{deviceId} {
-      allow read, write: if true;
+    // 나 -> otherId 방향 친구 관계 문서 존재 여부
+    function isFriend(otherId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/friendships/$(request.auth.uid + '_' + otherId));
     }
 
-    match /fcm_tokens/{userId} {
-      allow read, write: if true;
+    // ---- 사용자별 데이터 (goals, attempts, metadata/migration) ----
+    match /users/{uid}/{document=**} {
+      allow read, write: if isMe(uid);
     }
 
+    // ---- 최상위 goals (Cloud Functions 푸시용 사본) ----
     match /goals/{goalId} {
-      allow read, write: if true;
+      allow get: if signedIn() &&
+        (resource == null || resource.data.device_id == request.auth.uid);
+      // 앱은 where('device_id', '==', uid) 로만 조회
+      allow list: if signedIn() && resource.data.device_id == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.device_id == request.auth.uid;
+      allow update: if signedIn() &&
+        resource.data.device_id == request.auth.uid &&
+        request.resource.data.device_id == request.auth.uid;
+      allow delete: if signedIn() && resource.data.device_id == request.auth.uid;
     }
+
+    // ---- FCM 토큰 ----
+    match /fcm_tokens/{userId} {
+      allow read, delete: if isMe(userId);
+      allow create, update: if isMe(userId) && request.resource.data.user_id == userId;
+    }
+
+    // ---- 알림 스케줄 ----
+    match /notification_schedules/{scheduleId} {
+      allow get: if signedIn() &&
+        (resource == null || resource.data.user_id == request.auth.uid);
+      // 앱은 where('user_id', '==', uid) (+ goal_id) 로 조회
+      allow list: if signedIn() && resource.data.user_id == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
+      allow update: if signedIn() &&
+        resource.data.user_id == request.auth.uid &&
+        request.resource.data.user_id == request.auth.uid;
+      allow delete: if signedIn() && resource.data.user_id == request.auth.uid;
+    }
+
+    // ---- 기기/사용자 정보 (이메일, 닉네임 포함) ----
+    match /devices/{deviceId} {
+      allow read: if isMe(deviceId) || isFriend(deviceId);
+      // setDoc(merge) 이므로 create/update 동일 조건
+      allow write: if isMe(deviceId) && request.resource.data.device_id == deviceId;
+    }
+
+    // ---- 친구에게 보이는 프로필 요약 ----
+    match /user_profiles/{uid} {
+      allow read: if isMe(uid) || isFriend(uid);
+      allow write: if isMe(uid);
+    }
+
+    // ---- 초대 코드 ----
+    match /invite_codes/{code} {
+      // 코드 수락 시 단건 조회 필요 (목록 조회는 금지)
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() &&
+        request.resource.data.device_id == request.auth.uid &&
+        request.resource.data.code == code;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.device_id == request.auth.uid;
+    }
+
+    // ---- 친구 관계 (문서 id = device_id + '_' + friend_device_id, 양방향 생성) ----
+    match /friendships/{fid} {
+      allow get: if signedIn() &&
+        (resource == null ||
+         resource.data.device_id == request.auth.uid ||
+         resource.data.friend_device_id == request.auth.uid);
+      allow list: if signedIn() && resource.data.device_id == request.auth.uid;
+      allow create: if signedIn() &&
+        fid == request.resource.data.device_id + '_' + request.resource.data.friend_device_id &&
+        request.resource.data.device_id != request.resource.data.friend_device_id &&
+        (request.resource.data.device_id == request.auth.uid ||
+         request.resource.data.friend_device_id == request.auth.uid);
+      allow update: if false;
+      allow delete: if signedIn() &&
+        (resource.data.device_id == request.auth.uid ||
+         resource.data.friend_device_id == request.auth.uid);
+    }
+
+    // ---- 응원 ----
+    match /cheers/{cheerId} {
+      allow create: if signedIn() &&
+        request.resource.data.from_device_id == request.auth.uid &&
+        isFriend(request.resource.data.to_device_id) &&
+        request.resource.data.read == false;
+      allow read: if signedIn() &&
+        (resource.data.to_device_id == request.auth.uid ||
+         resource.data.from_device_id == request.auth.uid);
+      // 받은 사람만, read 필드만 변경 가능
+      allow update: if signedIn() &&
+        resource.data.to_device_id == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if false;
+    }
+
+    // 그 외 모든 경로는 기본 거부
   }
 }
