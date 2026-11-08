@@ -1,0 +1,457 @@
+/* ============================================================
+   꾸물 — Global Stylesheet
+   ============================================================ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ────────────────────────────────────────────────────────────
+   1. WEB FONTS
+   ──────────────────────────────────────────────────────────── */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+/* ────────────────────────────────────────────────────────────
+   2. BASE LAYER — 라이트/다크 모드 테마
+   ──────────────────────────────────────────────────────────── */
+@layer base {
+  /* 라이트 모드 (기본) - 미니멀 프리미엄 */
+  :root,
+  :root.light {
+    --color-primary: 99 102 241;        /* primary-500 인디고 */
+    --color-success: 16 185 129;        /* success-500 에메랄드 */
+    --color-danger:  100 116 139;       /* danger-500  슬레이트 */
+
+    /* Apple/Notion 스타일 배경 시스템 */
+    --color-bg:      248 249 251;       /* 연한 회색 배경 (밋밋하지 않음) */
+    --color-surface: 255 255 255;       /* 카드 순백색 (대비 확보) */
+    --color-text:    17 24 39;          /* 거의 블랙 (강한 대비) */
+    --color-text-secondary: 71 85 105;  /* 중간 회색 (부제목용) */
+    --color-muted:   148 163 184;       /* 연한 회색 (서브정보) */
+    --color-border:  226 232 240;       /* subtle border */
+  }
+
+  /* 다크 모드 */
+  :root.dark {
+    --color-primary: 99 102 241;        /* primary-500 인디고 */
+    --color-success: 16 185 129;        /* success-500 에메랄드 */
+    --color-danger:  100 116 139;       /* danger-500  슬레이트 */
+    --color-bg:      10 10 10;          /* neutral-950 */
+    --color-surface: 23 23 23;          /* neutral-900 */
+    --color-text:    250 250 250;       /* neutral-50  */
+    --color-muted:   163 163 163;       /* neutral-400 */
+    --color-border:  38 38 38;          /* neutral-800 */
+  }
+
+  html {
+    font-family: "Pretendard Variable", Pretendard, Inter, -apple-system,
+      BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Helvetica Neue",
+      Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+    background-color: rgb(var(--color-bg));
+    color: rgb(var(--color-text));
+  }
+
+  body {
+    @apply min-h-screen antialiased text-body;
+    overflow-x: hidden;
+    background-color: rgb(var(--color-bg));
+    color: rgb(var(--color-text));
+  }
+
+  /* 스크롤바 스타일 (웹킷) */
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background-color: rgb(var(--color-bg));
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--color-muted));
+    border-radius: 9999px;
+  }
+
+  /* 선택 영역 */
+  ::selection {
+    @apply bg-primary-500/30;
+    color: rgb(var(--color-text));
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+   3. COMPONENT LAYER
+   ──────────────────────────────────────────────────────────── */
+@layer components {
+  /* ── 버튼 ─────────────────────────────────────────────── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2
+           font-semibold transition-all duration-300
+           rounded-btn px-6 py-3 text-body
+           active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-500 text-white
+           hover:bg-primary-600 hover:shadow-md
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
+  }
+
+  .btn-secondary {
+    @apply btn bg-primary-50 text-primary-700 border border-border
+           hover:bg-primary-100 hover:border-primary-200
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
+  }
+
+  .btn-danger {
+    @apply btn bg-danger-500 text-white
+           hover:bg-danger-600 hover:shadow-md
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger-400 focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-muted
+           hover:bg-surface hover:text-text;
+  }
+
+  .btn-lg {
+    @apply px-8 py-4 text-title rounded-xl;
+  }
+
+  .btn-sm {
+    @apply px-4 py-2 text-caption rounded-lg;
+  }
+
+  /* ── 카드 ─────────────────────────────────────────────── */
+  .card {
+    @apply bg-surface rounded-card shadow-sm
+           border border-border
+           transition-all duration-300;
+  }
+
+  .card-interactive {
+    @apply card cursor-pointer
+           hover:shadow-md hover:border-border
+           active:scale-[0.98];
+  }
+
+  .card-highlighted {
+    @apply card border-primary-500/30 shadow-glow-primary;
+  }
+
+  .card-danger {
+    @apply card border-danger-500/30 shadow-glow-danger;
+  }
+
+  .card-success {
+    @apply card border-success-500/30 shadow-glow-success;
+  }
+
+  /* ── 타이머 ────────────────────────────────────────────── */
+  .timer-display {
+    @apply text-timer-xl font-mono text-center tabular-nums
+           tracking-tighter select-none;
+  }
+
+  .timer-display-urgent {
+    @apply timer-display text-primary-400 animate-timer-pulse;
+  }
+
+  .timer-ring {
+    @apply relative inline-flex items-center justify-center;
+  }
+
+  .timer-ring svg circle {
+    transition: stroke-dashoffset 1s linear;
+  }
+
+  /* ── Streak 뱃지 ───────────────────────────────────────── */
+  .streak-badge {
+    @apply inline-flex items-center gap-1.5
+           px-3 py-1 rounded-badge
+           text-micro font-semibold
+           bg-primary-500/15 text-primary-400
+           border border-primary-500/30;
+  }
+
+  .streak-badge-fire {
+    @apply streak-badge animate-streak-fire
+           bg-gradient-to-r from-primary-500/20 to-success-500/20
+           border-primary-400/40;
+  }
+
+  .streak-badge-dead {
+    @apply inline-flex items-center gap-1.5
+           px-3 py-1 rounded-badge
+           text-micro font-semibold
+           bg-neutral-700 text-neutral-400
+           border border-neutral-600;
+  }
+
+  /* ── 부활 카드 ──────────────────────────────────────────── */
+  .revival-card {
+    @apply card p-6 text-center
+           border-primary-500/40 bg-gradient-to-b from-neutral-800 to-primary-950/20;
+  }
+
+  .revival-card .revival-icon {
+    @apply text-4xl mb-3;
+  }
+
+  .revival-card .revival-title {
+    @apply text-title text-primary-300 mb-2;
+  }
+
+  .revival-card .revival-desc {
+    @apply text-caption text-neutral-400 mb-4;
+  }
+
+  /* ── 입력 ─────────────────────────────────────────────── */
+  .input {
+    @apply w-full bg-surface border border-border
+           rounded-btn px-4 py-3 text-body text-text
+           placeholder:text-muted
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500
+           transition-all duration-300 shadow-sm;
+  }
+
+  /* ── 프로그레스 바 ──────────────────────────────────────── */
+  .progress-bar {
+    @apply w-full h-2 bg-border rounded-full overflow-hidden;
+  }
+
+  .progress-bar-fill {
+    @apply h-full rounded-full transition-all duration-300 ease-out;
+  }
+
+  /* ── Safe Area (모바일 PWA) ─────────────────────────────── */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+   4. UTILITY LAYER — 커스텀 유틸리티
+   ──────────────────────────────────────────────────────────── */
+@layer utilities {
+  /* ── 그라데이션 ────────────────────────────────────────── */
+  .gradient-primary {
+    background: linear-gradient(135deg, #6366F1 0%, #818CF8 50%, #4F46E5 100%);
+  }
+
+  .gradient-success {
+    background: linear-gradient(135deg, #10B981 0%, #34D399 50%, #059669 100%);
+  }
+
+  .gradient-danger {
+    background: linear-gradient(135deg, #64748B 0%, #94A3B8 50%, #475569 100%);
+  }
+
+  .gradient-hero {
+    background: linear-gradient(180deg, #6366F1 0%, #818CF8 100%);
+  }
+
+  .gradient-dark-fade {
+    background: linear-gradient(180deg, rgba(23,23,23,0) 0%, rgba(23,23,23,1) 100%);
+  }
+
+  .gradient-text-primary {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #6366F1, #A5B4FC);
+  }
+
+  /* ── 글래스모피즘 ───────────────────────────────────────── */
+  .glass {
+    @apply bg-neutral-800/60 backdrop-blur-md border border-neutral-700/50;
+  }
+
+  .glass-dark {
+    @apply bg-neutral-950/70 backdrop-blur-lg border border-neutral-800/50;
+  }
+
+  /* ── 텍스트 Glow ────────────────────────────────────────── */
+  .text-glow-primary {
+    text-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
+  }
+
+  .text-glow-danger {
+    text-shadow: 0 0 12px rgba(100, 116, 139, 0.4);
+  }
+
+  .text-glow-success {
+    text-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+  }
+
+  /* ── 오버레이 ─────────────────────────────────────────── */
+  .overlay-dark {
+    @apply fixed inset-0 bg-neutral-950/80 backdrop-blur-sm z-40;
+  }
+
+  /* ── No-scrollbar ──────────────────────────────────────── */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ── 터치 최적화 ────────────────────────────────────────── */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+   5. RAW CSS ANIMATIONS (Tailwind 외부)
+   ──────────────────────────────────────────────────────────── */
+
+/* ── Confetti ────────────────────────────────────────────── */
+.confetti-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 9999;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -20px;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  animation: confetti-fall-full 2.5s ease-in forwards;
+}
+
+.confetti-piece:nth-child(odd) {
+  border-radius: 50%;
+}
+
+@keyframes confetti-fall-full {
+  0% {
+    transform: translateY(-10vh) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(105vh) rotate(720deg) scale(0.4);
+    opacity: 0;
+  }
+}
+
+/* Confetti 색상 — 인디고 + 에메랄드 톤 */
+.confetti-piece:nth-child(6n+1) { background: #6366F1; left: 10%; animation-delay: 0s;    animation-duration: 2.2s; }
+.confetti-piece:nth-child(6n+2) { background: #10B981; left: 25%; animation-delay: 0.1s;  animation-duration: 2.6s; }
+.confetti-piece:nth-child(6n+3) { background: #A5B4FC; left: 40%; animation-delay: 0.2s;  animation-duration: 2.0s; }
+.confetti-piece:nth-child(6n+4) { background: #34D399; left: 55%; animation-delay: 0.05s; animation-duration: 2.8s; }
+.confetti-piece:nth-child(6n+5) { background: #818CF8; left: 70%; animation-delay: 0.15s; animation-duration: 2.3s; }
+.confetti-piece:nth-child(6n+6) { background: #C7D2FE; left: 85%; animation-delay: 0.25s; animation-duration: 2.5s; }
+
+/* ── 카운트다운 Pulse Ring ───────────────────────────────── */
+.countdown-ring-pulse {
+  position: relative;
+}
+
+.countdown-ring-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid rgba(99, 102, 241, 0.4);
+  animation: ring-expand 1.5s ease-out infinite;
+}
+
+@keyframes ring-expand {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.15);
+    opacity: 0;
+  }
+}
+
+/* ── 타이머 마지막 구간 — 차분한 펄스 ────────────────────── */
+.countdown-critical {
+  animation: critical-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes critical-pulse {
+  from {
+    color: #818CF8;
+    text-shadow: 0 0 8px rgba(99, 102, 241, 0.2);
+  }
+  to {
+    color: #6366F1;
+    text-shadow: 0 0 16px rgba(99, 102, 241, 0.5);
+  }
+}
+
+/* ── 성공 Checkmark ──────────────────────────────────────── */
+.success-check {
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: draw-check 0.5s 0.2s ease-out forwards;
+}
+
+@keyframes draw-check {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── Skeleton Loading ────────────────────────────────────── */
+:root {
+  --skeleton-base: rgba(229, 231, 235, 1);
+  --skeleton-shine: rgba(209, 213, 219, 1);
+}
+
+:root.dark {
+  --skeleton-base: rgba(38, 38, 38, 1);
+  --skeleton-shine: rgba(64, 64, 64, 1);
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-base) 25%,
+    var(--skeleton-shine) 50%,
+    var(--skeleton-base) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.5rem;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Ripple (버튼 터치 피드백) ─────────────────────────── */
+.ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%),
+    rgba(255,255,255,0.2) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.ripple:active::after {
+  opacity: 1;
+}
